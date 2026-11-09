@@ -10,19 +10,21 @@ import {
   FlaskConical,
   Wallet,
   Receipt,
-  BarChart3,
+  HandCoins,
+  Tags,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Resultado del mes", icon: LayoutDashboard },
   { href: "/dentistas", label: "Dentistas", icon: UserRound },
   { href: "/pacientes", label: "Pacientes", icon: Users },
   { href: "/atenciones", label: "Atenciones", icon: ClipboardList },
+  { href: "/prestaciones", label: "Prestaciones", icon: Tags },
   { href: "/laboratorio", label: "Laboratorio", icon: FlaskConical },
   { href: "/caja", label: "Caja", icon: Wallet },
   { href: "/liquidaciones", label: "Liquidaciones", icon: Receipt },
-  { href: "/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/cobranza", label: "Cobranza", icon: HandCoins },
 ];
 
 export function Sidebar() {

@@ -10,7 +10,7 @@ import {
   FlaskConical,
   Wallet,
   Receipt,
-  BarChart3,
+  HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,7 @@ const mobileNavItems = [
   { href: "/atenciones", label: "Atenciones", icon: ClipboardList },
   { href: "/caja", label: "Caja", icon: Wallet },
   { href: "/pacientes", label: "Pacientes", icon: Users },
-  { href: "/reportes", label: "Reportes", icon: BarChart3 },
+  { href: "/cobranza", label: "Cobranza", icon: HandCoins },
 ];
 
 export function BottomNav() {
