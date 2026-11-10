@@ -141,7 +141,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Por categoría */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             {summary.by_category.map((c) => {
               const meta = CATEGORIES.find((x) => x.key === c.category)!;
               return (

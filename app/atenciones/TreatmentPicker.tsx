@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { formatCLP, cn } from "@/lib/utils";
-import type { TreatmentItem, TreatmentCategory } from "@/app/actions/atenciones";
+import type { TreatmentItem, PickerCategory } from "@/app/actions/atenciones";
 
 /** Quita tildes y pasa a minúsculas para comparar ("Restauración" = "restauracion"). */
 export const normalize = (s: string) =>
@@ -16,7 +16,7 @@ export const firstLetter = (s: string) => normalize(s).charAt(0).toUpperCase();
  * si calza con varias, se despliegan como sub-botones.
  * Las prestaciones nuevas que se creen con el mismo inicio aparecen solas en su grupo.
  */
-const QUICK: Record<"general" | "orthodontics", { label: string; match: RegExp }[]> = {
+const QUICK: Record<PickerCategory, { label: string; match: RegExp }[]> = {
   general: [
     { label: "Limpieza", match: /^limpieza/ },
     { label: "Destartraje", match: /^destartraje/ },
@@ -27,8 +27,6 @@ const QUICK: Record<"general" | "orthodontics", { label: string; match: RegExp }
     { label: "Radiografías", match: /^radiografia/ },
     { label: "Coronas", match: /^corona/ },
     { label: "Incrustaciones", match: /^(incrustacion|inlay|onlay)/ },
-    { label: "Blanqueamiento", match: /^blanqueamiento/ },
-    { label: "Carillas", match: /^carilla/ },
   ],
   orthodontics: [
     { label: "Control mensual", match: /^control/ },
@@ -37,6 +35,23 @@ const QUICK: Record<"general" | "orthodontics", { label: string; match: RegExp }
     { label: "Retiros", match: /^retiro/ },
     { label: "Contenciones", match: /^contencion/ },
     { label: "Brackets", match: /(reposicion brackets|eliminacion adhesivo)/ },
+  ],
+  endodontics: [
+    { label: "Molar", match: /^endodoncia molar/ },
+    { label: "Premolar", match: /^endodoncia pre-?molar/ },
+    { label: "Diente anterior", match: /^endodoncia (diente )?anterior/ },
+    { label: "Retratamiento", match: /^retratamiento/ },
+    { label: "Urgencia / medicación", match: /^(trepanacion|medicacion)/ },
+  ],
+  aesthetics: [
+    { label: "Toxina / Botox", match: /^(toxina|botox)/ },
+    { label: "Labios y nariz", match: /^(aumento de labios|rino)/ },
+    { label: "Hilos tensores", match: /^hilos/ },
+    { label: "Vitaminas", match: /^vitaminas/ },
+    { label: "BB Glow", match: /^bb glow/ },
+    { label: "Mesoterapia", match: /^mesoterapia/ },
+    { label: "Blanqueamiento", match: /^blanqueamiento/ },
+    { label: "Carillas", match: /^carilla/ },
   ],
 };
 
@@ -49,7 +64,7 @@ export function TreatmentPicker({
   onPick,
 }: {
   items: TreatmentItem[];
-  category: Extract<TreatmentCategory, "general" | "orthodontics">;
+  category: PickerCategory;
   /** Ids ya elegidos (se marcan). En modo visita pueden ser varios. */
   selectedIds: string[];
   onPick: (t: TreatmentItem) => void;

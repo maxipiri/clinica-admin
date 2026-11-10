@@ -67,8 +67,6 @@ export function NuevaAtencionModal({
 
   const prosthesisItems = treatments.filter((t) => t.category === "prosthesis");
   const implantItem = treatments.find((t) => t.category === "implant");
-  const generalItems = treatments.filter((t) => t.category === "general");
-  const orthoItems = treatments.filter((t) => t.category === "orthodontics");
 
   // ─── Estado inicial (nuevo o edición) ──────────────────────────────────────
   const startCategory: TreatmentCategory = editing?.category ?? initialCategory;
@@ -172,7 +170,8 @@ export function NuevaAtencionModal({
   }
 
   /** General / Ortodoncia nuevas: se pueden agregar varios tratamientos a la visita. */
-  const cartMode = !isEdit && (category === "general" || category === "orthodontics");
+  const isPickerCat = category !== "prosthesis" && category !== "implant";
+  const cartMode = !isEdit && isPickerCat;
   const cartTotal = cart.reduce((sum, i) => sum + num(i.amount), 0);
 
   function addToCart(t: TreatmentItem | null) {
@@ -215,8 +214,8 @@ export function NuevaAtencionModal({
   }, [amount, effectiveLab, suppliesCost, payMode, pct, fixed, paid, dentist, editing, isEdit, cartMode, cartTotal]);
 
   const selectedProsthesis = prosthesisItems.find((t) => t.id === treatmentId);
-  const showLabCost = category === "prosthesis" || ((category === "general" || category === "orthodontics") && num(labCost) > 0);
-  const catalogForSelect = category === "orthodontics" ? orthoItems : generalItems;
+  const showLabCost = category === "prosthesis" || (isPickerCat && num(labCost) > 0);
+  const catalogForSelect = treatments.filter((t) => t.category === category);
   const catMeta = CATEGORIES.find((c) => c.key === category)!;
 
   return (
@@ -248,7 +247,7 @@ export function NuevaAtencionModal({
           )}
 
           {/* Categoría */}
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {CATEGORIES.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
@@ -304,7 +303,7 @@ export function NuevaAtencionModal({
           </div>
 
           {/* ─── Selector según categoría ─── */}
-          {(category === "general" || category === "orthodontics") && (
+          {isPickerCat && (
             <div>
               <label className={labelCls}>{cartMode ? "Tratamientos de la visita" : "Tratamiento"}</label>
               <TreatmentPicker
@@ -478,6 +477,10 @@ export function NuevaAtencionModal({
                   ? "Ej: Implante pieza 3.6"
                   : category === "orthodontics"
                   ? "Ej: Ortodoncia brackets metálicos"
+                  : category === "endodontics"
+                  ? "Ej: Endodoncia molar pieza 3.6"
+                  : category === "aesthetics"
+                  ? "Ej: Botox 3 zonas"
                   : "Ej: Obturación resina pieza 2.4"
               }
               className={inputCls}

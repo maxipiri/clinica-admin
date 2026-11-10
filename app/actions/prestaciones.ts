@@ -11,7 +11,7 @@ const itemSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(200),
   default_price: z.coerce.number().int().min(0, "Precio inválido"),
   lab_cost: z.coerce.number().int().min(0, "Costo laboratorio inválido").default(0),
-  category: z.enum(["general", "prosthesis", "implant", "orthodontics"]),
+  category: z.enum(["general", "prosthesis", "implant", "orthodontics", "endodontics", "aesthetics"]),
 });
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
