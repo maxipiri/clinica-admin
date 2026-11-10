@@ -314,21 +314,21 @@ export function AtencionesClient({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Total general · todas las categorías · {allMonths ? "todos los meses" : monthLabel(month)} ({general.count} atenciones)
           </p>
-          <EyeToggle hidden={!!hidden.general} onClick={() => toggleHidden("general")} className="-mt-1 -mr-1" />
+          <EyeToggle hidden={!!hidden.total} onClick={() => toggleHidden("total")} className="-mt-1 -mr-1" />
         </div>
         <div className="grid grid-cols-3 gap-3 mt-2">
           <div>
             <p className="text-xs text-muted-foreground">Total realizado</p>
-            <p className="text-lg sm:text-xl font-bold text-foreground">{money("general", general.billed)}</p>
+            <p className="text-lg sm:text-xl font-bold text-foreground">{money("total", general.billed)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Efectivamente cobrado</p>
-            <p className="text-lg sm:text-xl font-bold text-emerald-600">{money("general", general.collected)}</p>
+            <p className="text-lg sm:text-xl font-bold text-emerald-600">{money("total", general.collected)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Saldo por cobrar</p>
             <p className={cn("text-lg sm:text-xl font-bold", general.pending > 0 ? "text-rose-600" : "text-foreground")}>
-              {money("general", general.pending)}
+              {money("total", general.pending)}
             </p>
           </div>
         </div>

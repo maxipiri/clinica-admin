@@ -70,7 +70,7 @@ select c.id, 'Pedro Riquelme', 'commission', 50, 'gross'
 from public.clinics c
 where not exists (
     select 1 from public.dentists d
-    where d.clinic_id = c.id and d.full_name ilike 'pedro riquelme%'
+    where d.clinic_id = c.id and d.full_name ilike '%riquelme%'
 );
 
 -- 5. Estética facial: Dr. Cristóbal Segovia (50% provisorio; ajustar en Dentistas)
