@@ -14,7 +14,16 @@ import {
 
 export type PaymentStatus = "pending" | "partial" | "paid";
 
-export type TreatmentCategory = "general" | "prosthesis" | "implant" | "orthodontics";
+export type TreatmentCategory =
+  | "general"
+  | "prosthesis"
+  | "implant"
+  | "orthodontics"
+  | "endodontics"
+  | "aesthetics";
+
+/** Categorías que usan el selector de tratamientos (botones rápidos, letras, varios por visita). */
+export type PickerCategory = Exclude<TreatmentCategory, "prosthesis" | "implant">;
 
 export type AppointmentPayment = {
   id: string;
@@ -83,7 +92,7 @@ const appointmentSchema = z.object({
   amount: z.coerce.number().int().min(0, "Monto inválido"),
   paid_amount: z.coerce.number().int().min(0, "Monto pagado inválido"),
   payment_method: z.enum(["cash", "transfer", "debit", "credit", "other"]).optional().or(z.literal("")),
-  category: z.enum(["general", "prosthesis", "implant", "orthodontics"]).default("general"),
+  category: z.enum(["general", "prosthesis", "implant", "orthodontics", "endodontics", "aesthetics"]).default("general"),
   crown_qty: z.coerce.number().int().min(0).optional(),
   lab_cost: z.coerce.number().int().min(0, "Costo laboratorio inválido").default(0),
   supplies_cost: z.coerce.number().int().min(0, "Costo insumos inválido").default(0),

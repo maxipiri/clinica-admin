@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAppointments } from "@/app/actions/atenciones";
 import { formatCLP } from "@/lib/utils";
 import { whatsappLink } from "@/lib/whatsapp";
-import { CATEGORIES, PAYMENT_METHOD_LABEL } from "@/app/atenciones/categories";
+import { CATEGORIES, GENERAL_CATEGORY, PAYMENT_METHOD_LABEL } from "@/app/atenciones/categories";
 
 export const metadata: Metadata = {
   title: "Ficha del paciente",
@@ -130,7 +130,7 @@ export default async function FichaPacientePage({ params }: { params: Promise<{ 
           ) : (
             <div className="divide-y divide-border">
               {appointments.map((a) => {
-                const cat = CATEGORIES.find((c) => c.key === a.category) ?? CATEGORIES[3];
+                const cat = CATEGORIES.find((c) => c.key === a.category) ?? GENERAL_CATEGORY;
                 const pending = Math.max(0, a.amount - a.paid_amount);
                 return (
                   <div key={a.id} className="px-4 py-3 flex items-start justify-between gap-3 text-sm">

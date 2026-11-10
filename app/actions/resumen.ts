@@ -115,7 +115,7 @@ export async function getMonthSummary(month: string): Promise<MonthSummary> {
     const lab = sum((a) => a.lab_cost);
     const supplies = sum((a) => a.supplies_cost);
 
-    const cats: TreatmentCategory[] = ["prosthesis", "implant", "orthodontics", "general"];
+    const cats: TreatmentCategory[] = ["prosthesis", "implant", "endodontics", "orthodontics", "aesthetics", "general"];
     const by_category = cats.map((category) => {
       const list = appts.filter((a) => a.category === category);
       return {

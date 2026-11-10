@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -17,8 +17,9 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
-  X,
   Undo2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { formatCLP, cn } from "@/lib/utils";
 import {
@@ -38,7 +39,7 @@ import type {
 import type { Dentist } from "@/app/actions/dentistas";
 import type { Patient } from "@/app/actions/pacientes";
 import { NuevaAtencionModal } from "./NuevaAtencionModal";
-import { CATEGORIES, PAYMENT_METHOD_LABEL } from "./categories";
+import { CATEGORIES, GENERAL_CATEGORY, PAYMENT_METHOD_LABEL } from "./categories";
 
 const STATUS_CONFIG: Record<PaymentStatus, { label: string; bg: string; text: string; icon: React.ReactNode }> = {
   pending: {
@@ -96,6 +97,23 @@ function monthLabel(ym: string) {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function EyeToggle({ hidden, onClick, className }: { hidden: boolean; onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn("p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent", className)}
+      title={hidden ? "Mostrar montos" : "Ocultar montos"}
+      aria-label={hidden ? "Mostrar montos" : "Ocultar montos"}
+    >
+      {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+    </button>
+  );
+}
+
 export function AtencionesClient({
   appointments = [],
   dentists = [],
@@ -116,6 +134,29 @@ export function AtencionesClient({
   const [filterDentist, setFilterDentist] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<TreatmentCategory | "all">("all");
+
+  // Ojo para ocultar montos (como en las apps del banco). Se recuerda en este navegador.
+  const [hidden, setHidden] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("clinica-admin:montos-ocultos");
+      if (saved) setHidden(JSON.parse(saved));
+    } catch {
+      /* sin almacenamiento disponible: se muestran todos */
+    }
+  }, []);
+  function toggleHidden(key: string) {
+    setHidden((h) => {
+      const next = { ...h, [key]: !h[key] };
+      try {
+        localStorage.setItem("clinica-admin:montos-ocultos", JSON.stringify(next));
+      } catch {
+        /* ignorar */
+      }
+      return next;
+    });
+  }
+  const money = (key: string, value: number) => (hidden[key] ? "$ ••••••" : formatCLP(value));
   const [month, setMonth] = useState<string>(todayCL().slice(0, 7));
   const [allMonths, setAllMonths] = useState(false);
   const [voidPay, setVoidPay] = useState<{ appt: Appointment; payment: AppointmentPayment } | null>(null);
@@ -269,29 +310,32 @@ export function AtencionesClient({
 
       {/* Total general */}
       <div className="p-4 bg-card border border-border rounded-xl">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Total general · todas las categorías · {allMonths ? "todos los meses" : monthLabel(month)} ({general.count} atenciones)
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Total general · todas las categorías · {allMonths ? "todos los meses" : monthLabel(month)} ({general.count} atenciones)
+          </p>
+          <EyeToggle hidden={!!hidden.general} onClick={() => toggleHidden("general")} className="-mt-1 -mr-1" />
+        </div>
         <div className="grid grid-cols-3 gap-3 mt-2">
           <div>
             <p className="text-xs text-muted-foreground">Total realizado</p>
-            <p className="text-lg sm:text-xl font-bold text-foreground">{formatCLP(general.billed)}</p>
+            <p className="text-lg sm:text-xl font-bold text-foreground">{money("general", general.billed)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Efectivamente cobrado</p>
-            <p className="text-lg sm:text-xl font-bold text-emerald-600">{formatCLP(general.collected)}</p>
+            <p className="text-lg sm:text-xl font-bold text-emerald-600">{money("general", general.collected)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Saldo por cobrar</p>
             <p className={cn("text-lg sm:text-xl font-bold", general.pending > 0 ? "text-rose-600" : "text-foreground")}>
-              {formatCLP(general.pending)}
+              {money("general", general.pending)}
             </p>
           </div>
         </div>
       </div>
 
       {/* Cuadros por categoría */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {CATEGORIES.map(({ key, plural, newLabel, icon: Icon }) => {
           const t = totals(base.filter((a) => a.category === key));
           const active = filterCategory === key;
@@ -299,7 +343,7 @@ export function AtencionesClient({
             <div
               key={key}
               className={cn(
-                "bg-card border rounded-xl flex flex-col transition-shadow",
+                "relative bg-card border rounded-xl flex flex-col transition-shadow",
                 active ? "border-primary ring-2 ring-primary/20" : "border-border"
               )}
             >
@@ -314,25 +358,30 @@ export function AtencionesClient({
                     <Icon className="w-4 h-4 text-primary" />
                     {plural}
                   </span>
-                  <span className="text-xs text-muted-foreground">{t.count}</span>
+                  <span className="text-xs text-muted-foreground mr-8">{t.count}</span>
                 </div>
                 <dl className="mt-3 space-y-1 text-xs">
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Total</dt>
-                    <dd className="font-semibold text-foreground">{formatCLP(t.billed)}</dd>
+                    <dd className="font-semibold text-foreground">{money(key, t.billed)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Cobrado</dt>
-                    <dd className="font-semibold text-emerald-600">{formatCLP(t.collected)}</dd>
+                    <dd className="font-semibold text-emerald-600">{money(key, t.collected)}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Por cobrar</dt>
                     <dd className={cn("font-semibold", t.pending > 0 ? "text-rose-600" : "text-foreground")}>
-                      {formatCLP(t.pending)}
+                      {money(key, t.pending)}
                     </dd>
                   </div>
                 </dl>
               </button>
+              <EyeToggle
+                hidden={!!hidden[key]}
+                onClick={() => toggleHidden(key)}
+                className="absolute top-3 right-3"
+              />
               <button
                 type="button"
                 onClick={() => openNew(key)}
@@ -378,16 +427,30 @@ export function AtencionesClient({
           </select>
         </div>
 
-        {filterCategory !== "all" && (
-          <button
-            type="button"
-            onClick={() => setFilterCategory("all")}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary font-semibold border border-primary/30"
-          >
-            Mostrando: {CATEGORIES.find((c) => c.key === filterCategory)?.plural}
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[{ key: "all" as const, plural: "Todas", icon: null }, ...CATEGORIES].map((c) => {
+            const active = filterCategory === c.key;
+            const count = c.key === "all" ? base.length : base.filter((a) => a.category === c.key).length;
+            const Icon = c.icon;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setFilterCategory(c.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card border-border text-foreground hover:bg-accent"
+                )}
+              >
+                {Icon && <Icon className="w-3.5 h-3.5" />}
+                {c.plural}
+                <span className={cn("text-[10px]", active ? "opacity-80" : "text-muted-foreground")}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {!canCreate && (
@@ -411,7 +474,7 @@ export function AtencionesClient({
           {filtered.map((a) => {
             const st = STATUS_CONFIG[a.payment_status];
             const pendingBalance = Math.max(0, a.amount - a.paid_amount);
-            const cat = CATEGORIES.find((c) => c.key === a.category) ?? CATEGORIES[3];
+            const cat = CATEGORIES.find((c) => c.key === a.category) ?? GENERAL_CATEGORY;
             const historyOpen = !!openHistory[a.id];
             const registered = a.payments.reduce((s, p) => s + p.amount, 0);
             const unregistered = Math.max(0, a.paid_amount - registered);
