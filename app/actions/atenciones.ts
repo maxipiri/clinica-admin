@@ -308,7 +308,7 @@ async function syncLabOrder(
       return;
     }
 
-    // Laboratorio: el del catálogo, o Loreto, o el primero activo
+    // Laboratorio: el del catálogo; si no, Ovident (implantes) o Loreto (prótesis)
     let lab_id: string | null = null;
     if (appt.treatment_id) {
       const { data: t } = await supabase
@@ -324,7 +324,9 @@ async function syncLabOrder(
         .select("id, name")
         .eq("active", true)
         .order("created_at");
-      lab_id = labs?.find((l: any) => /loret/i.test(l.name))?.id ?? labs?.[0]?.id ?? null;
+      // Coronas de implantes: Ovident. Prótesis: Loreto González.
+      const preferred = appt.category === "implant" ? /ovident/i : /loret/i;
+      lab_id = labs?.find((l: any) => preferred.test(l.name))?.id ?? labs?.[0]?.id ?? null;
     }
     if (!lab_id) return;
 

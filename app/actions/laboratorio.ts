@@ -43,6 +43,17 @@ export type LabOrder = {
   voided_at: string | null;
   created_at: string;
   is_overdue: boolean;
+  /** Historial de cambios de estado (más antiguo primero) */
+  events: LabOrderEvent[];
+};
+
+export type LabOrderEvent = {
+  id: string;
+  from_status: LabStatus | null;
+  to_status: LabStatus;
+  changed_by_name: string | null;
+  note: string | null;
+  created_at: string;
 };
 
 export type LabBillingSummary = {
@@ -227,7 +238,8 @@ export async function getLabOrders(filters?: {
          sent_date, due_date, received_date, installed_date,
          status, lab_cost, charged_to_patient, billing_month,
          lab_paid, lab_paid_at, voided_at, created_at,
-         labs(name)`
+         labs(name),
+         lab_order_events(id, from_status, to_status, changed_by_name, note, created_at)`
       )
       .is("voided_at", null)
       .order("created_at", { ascending: false });
@@ -247,6 +259,10 @@ export async function getLabOrders(filters?: {
       ...o,
       lab_name: o.labs?.name ?? null,
       labs: undefined,
+      events: ((o.lab_order_events ?? []) as LabOrderEvent[]).sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      ),
+      lab_order_events: undefined,
       is_overdue:
         !o.lab_paid &&
         o.due_date &&
