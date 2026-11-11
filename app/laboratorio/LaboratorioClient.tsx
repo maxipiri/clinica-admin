@@ -21,6 +21,8 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { formatCLP } from "@/lib/utils";
+import { CATEGORIES, CATEGORY_COLOR } from "@/app/atenciones/categories";
+import type { TreatmentCategory } from "@/app/actions/atenciones";
 import {
   createLab,
   createLabOrder,
@@ -52,7 +54,10 @@ const STATUS_CONFIG: Record<LabStatus, { label: string; color: string; icon: Rea
  * o una vuelta (laboratorio → clínica). El orden sugiere el siguiente paso.
  */
 type StepDirection = "sent" | "received" | "installed" | "other";
-const STEPS: { key: string; direction: StepDirection; label: string }[] = [
+type Step = { key: string; direction: StepDirection; label: string };
+
+/** Prótesis (incluye prótesis sobre implantes): va y vuelve varias veces. */
+const PROSTHESIS_STEPS: Step[] = [
   { key: "modelo", direction: "sent", label: "Enviado: modelo (para rodete)" },
   { key: "rodete", direction: "received", label: "Recibido: rodete para prueba" },
   { key: "enfilado", direction: "sent", label: "Enviado: para enfilado" },
@@ -60,20 +65,45 @@ const STEPS: { key: string; direction: StepDirection; label: string }[] = [
   { key: "terminacion", direction: "sent", label: "Enviado: para terminación" },
   { key: "terminada", direction: "received", label: "Recibido: prótesis terminada" },
   { key: "instalada", direction: "installed", label: "Instalada en el paciente" },
+];
+
+/** Implantes: tras el abono inicial se piden los insumos y se instalan en la cirugía. */
+const IMPLANT_STEPS: Step[] = [
+  { key: "insumos_pedidos", direction: "sent", label: "Insumos pedidos (tras el abono inicial)" },
+  { key: "insumos_recibidos", direction: "received", label: "Insumos recibidos en la clínica" },
+  { key: "cirugia", direction: "installed", label: "Instalado el día de la cirugía" },
+];
+
+const EXTRA_STEPS: Step[] = [
   { key: "reenvio", direction: "sent", label: "Otro envío al laboratorio (ajuste / reparación)" },
   { key: "recepcion", direction: "received", label: "Otra recepción del laboratorio" },
 ];
-const STEP_LABEL: Record<string, string> = Object.fromEntries(STEPS.map((st) => [st.key, st.label]));
+
+const STEP_LABEL: Record<string, string> = Object.fromEntries(
+  [...PROSTHESIS_STEPS, ...IMPLANT_STEPS, ...EXTRA_STEPS].map((st) => [st.key, st.label])
+);
+
+/** Una prótesis sobre implantes sigue el flujo de prótesis aunque esté en Implantes. */
+function isProsthesisWork(workType: string): boolean {
+  const t = workType.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /protesis|protsis|sobredentadura|hibrida|all.?on/.test(t);
+}
+
+/** Pasos principales según el tipo de trabajo. */
+function mainStepsFor(order: LabOrder): Step[] {
+  return order.category === "implant" && !isProsthesisWork(order.work_type ?? "")
+    ? IMPLANT_STEPS
+    : PROSTHESIS_STEPS;
+}
 
 /** Siguiente paso sugerido según el último movimiento registrado. */
-function nextStepKey(events: LabOrderEvent[]): string {
+function nextStepKey(events: LabOrderEvent[], main: Step[]): string {
   const withStage = events.filter((e) => e.stage);
   const last = withStage[withStage.length - 1];
-  if (!last) return "modelo";
-  const i = STEPS.findIndex((st) => st.key === last.stage);
-  if (i >= 0 && i < 6) return STEPS[i + 1].key;
+  if (!last) return main[0].key;
+  const i = main.findIndex((st) => st.key === last.stage);
+  if (i >= 0 && i < main.length - 1) return main[i + 1].key;
   if (last.direction === "sent") return "recepcion";
-  if (last.direction === "received") return "reenvio";
   return "reenvio";
 }
 
@@ -235,13 +265,15 @@ function NewOrderModal({ labs, onClose }: { labs: Lab[]; onClose: () => void }) 
 
 function StepModal({ order, onClose }: { order: LabOrder; onClose: () => void }) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
-  const [stepKey, setStepKey] = useState(nextStepKey(order.events ?? []));
+  const mainSteps = mainStepsFor(order);
+  const steps = [...mainSteps, ...EXTRA_STEPS];
+  const [stepKey, setStepKey] = useState(nextStepKey(order.events ?? [], mainSteps));
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
-  const step = STEPS.find((st) => st.key === stepKey)!;
+  const step = steps.find((st) => st.key === stepKey)!;
   const needsNote = stepKey === "reenvio" || stepKey === "recepcion";
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -278,7 +310,7 @@ function StepModal({ order, onClose }: { order: LabOrder; onClose: () => void })
         <form onSubmit={handleSubmit} className="lab-form">
           {error && <p className="lab-form-error">{error}</p>}
           <div className="space-y-1.5">
-            {STEPS.map((st) => (
+            {steps.map((st) => (
               <button
                 key={st.key}
                 type="button"
@@ -496,10 +528,23 @@ function OrderCard({
   const [showHistory, setShowHistory] = useState(false);
   const events = order.events ?? [];
   const lastStep = [...events].reverse().find((e) => e.stage);
+  const catKey: TreatmentCategory = order.category ?? "general";
+  const color = CATEGORY_COLOR[catKey];
+  const cat = CATEGORIES.find((c) => c.key === catKey)!;
+  const CatIcon = cat.icon;
   return (
-    <div className={`lab-order-card ${order.is_overdue ? "lab-order-card--overdue" : ""}`}>
+    <div
+      className={`lab-order-card ${order.is_overdue ? "lab-order-card--overdue" : ""}`}
+      style={{ background: color.bg, borderColor: order.is_overdue ? undefined : color.border, borderLeft: `6px solid ${color.main}` }}
+    >
       <div className="lab-order-header">
         <div className="lab-order-info">
+          <span
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold text-white"
+            style={{ background: color.main }}
+          >
+            <CatIcon className="w-3 h-3" /> {cat.label}
+          </span>
           <span className={`lab-status-badge ${cfg.color}`}>
             {cfg.icon} {cfg.label}
           </span>
@@ -713,6 +758,9 @@ export function LaboratorioClient({
 
   const [tab, setTab] = useState<Tab>("orders");
   const [modal, setModal] = useState<Modal>(null);
+  const [catFilter, setCatFilter] = useState<TreatmentCategory | "all">("all");
+  const visibleOrders =
+    catFilter === "all" ? safeOrders : safeOrders.filter((o) => (o.category ?? "general") === catFilter);
   const [statusTarget, setStatusTarget] = useState<LabOrder | null>(null);
   const [voidTarget, setVoidTarget] = useState<LabOrder | null>(null);
   const [voidReason, setVoidReason] = useState("");
@@ -792,9 +840,36 @@ export function LaboratorioClient({
       </div>
 
       {/* ── Contenido por tab ─────────────────────────────────────── */}
+      {tab === "orders" && safeOrders.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            onClick={() => setCatFilter("all")}
+            className={`rounded-full border px-3 py-1 text-sm font-semibold ${catFilter === "all" ? "bg-foreground text-background border-foreground" : "bg-card text-foreground"}`}
+          >
+            Todas ({safeOrders.length})
+          </button>
+          {CATEGORIES.filter((c) => safeOrders.some((o) => (o.category ?? "general") === c.key)).map((c) => {
+            const col = CATEGORY_COLOR[c.key];
+            const active = catFilter === c.key;
+            const n = safeOrders.filter((o) => (o.category ?? "general") === c.key).length;
+            return (
+              <button
+                key={c.key}
+                onClick={() => setCatFilter(active ? "all" : c.key)}
+                className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-semibold"
+                style={active ? { background: col.main, borderColor: col.main, color: "white" } : { background: col.bg, borderColor: col.border, color: col.main }}
+              >
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: active ? "white" : col.main }} />
+                {c.plural} ({n})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {tab === "orders" && (
         <div className="lab-orders-grid">
-          {safeOrders.length === 0 ? (
+          {visibleOrders.length === 0 ? (
             <div className="lab-empty">
               <FlaskConical className="w-10 h-10 text-muted-foreground" />
               <p>Sin órdenes registradas.</p>
@@ -805,7 +880,7 @@ export function LaboratorioClient({
               )}
             </div>
           ) : (
-            safeOrders.map((o) => (
+            visibleOrders.map((o) => (
               <OrderCard
                 key={o.id}
                 order={o}
