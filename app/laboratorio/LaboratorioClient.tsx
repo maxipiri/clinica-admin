@@ -16,6 +16,9 @@ import {
   ChevronUp,
   Building2,
   History,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import { formatCLP } from "@/lib/utils";
 import {
@@ -24,10 +27,12 @@ import {
   updateOrderStatus,
   voidLabOrder,
   payLabMonth,
+  registerLabStep,
 } from "@/app/actions/laboratorio";
 import type {
   Lab,
   LabOrder,
+  LabOrderEvent,
   LabBillingSummary,
   LabStatus,
 } from "@/app/actions/laboratorio";
@@ -41,6 +46,36 @@ const STATUS_CONFIG: Record<LabStatus, { label: string; color: string; icon: Rea
   installed: { label: "Instalada", color: "lab-status--installed", icon: <Wrench className="w-3.5 h-3.5" /> },
   cancelled: { label: "Cancelada", color: "lab-status--cancelled", icon: <XCircle className="w-3.5 h-3.5" /> },
 };
+
+/**
+ * Etapas de una prótesis: cada una es una ida (clínica → laboratorio)
+ * o una vuelta (laboratorio → clínica). El orden sugiere el siguiente paso.
+ */
+type StepDirection = "sent" | "received" | "installed" | "other";
+const STEPS: { key: string; direction: StepDirection; label: string }[] = [
+  { key: "modelo", direction: "sent", label: "Enviado: modelo (para rodete)" },
+  { key: "rodete", direction: "received", label: "Recibido: rodete para prueba" },
+  { key: "enfilado", direction: "sent", label: "Enviado: para enfilado" },
+  { key: "prueba_enfilado", direction: "received", label: "Recibido: enfilado para prueba" },
+  { key: "terminacion", direction: "sent", label: "Enviado: para terminación" },
+  { key: "terminada", direction: "received", label: "Recibido: prótesis terminada" },
+  { key: "instalada", direction: "installed", label: "Instalada en el paciente" },
+  { key: "reenvio", direction: "sent", label: "Otro envío al laboratorio (ajuste / reparación)" },
+  { key: "recepcion", direction: "received", label: "Otra recepción del laboratorio" },
+];
+const STEP_LABEL: Record<string, string> = Object.fromEntries(STEPS.map((st) => [st.key, st.label]));
+
+/** Siguiente paso sugerido según el último movimiento registrado. */
+function nextStepKey(events: LabOrderEvent[]): string {
+  const withStage = events.filter((e) => e.stage);
+  const last = withStage[withStage.length - 1];
+  if (!last) return "modelo";
+  const i = STEPS.findIndex((st) => st.key === last.stage);
+  if (i >= 0 && i < 6) return STEPS[i + 1].key;
+  if (last.direction === "sent") return "recepcion";
+  if (last.direction === "received") return "reenvio";
+  return "reenvio";
+}
 
 const METHOD_LABELS: Record<string, string> = {
   cash: "Efectivo", transfer: "Transferencia",
@@ -188,6 +223,111 @@ function NewOrderModal({ labs, onClose }: { labs: Lab[]; onClose: () => void }) 
             <button type="button" className="lab-btn-secondary" onClick={onClose}>Cancelar</button>
             <button type="submit" className="lab-btn-primary" disabled={isPending}>
               {isPending ? <span className="lab-spinner" /> : "Crear orden"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal: Registrar movimiento (ida / vuelta) ───────────────────────────────
+
+function StepModal({ order, onClose }: { order: LabOrder; onClose: () => void }) {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
+  const [stepKey, setStepKey] = useState(nextStepKey(order.events ?? []));
+  const [date, setDate] = useState(today);
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const step = STEPS.find((st) => st.key === stepKey)!;
+  const needsNote = stepKey === "reenvio" || stepKey === "recepcion";
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (needsNote && !note.trim()) {
+      setError("Escribe un detalle (ej: ajuste de oclusión)");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await registerLabStep({
+        order_id: order.id,
+        stage: stepKey,
+        direction: step.direction,
+        event_date: date,
+        note,
+      });
+      if (result.error) setError(result.error);
+      else {
+        onClose();
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="lab-modal-overlay" onClick={onClose}>
+      <div className="lab-modal lab-modal--sm" onClick={(e) => e.stopPropagation()}>
+        <h2 className="lab-modal-title">Registrar movimiento</h2>
+        <p className="lab-modal-subtitle">
+          {order.work_type} — {order.patient_name}
+          {order.lab_name ? ` · ${order.lab_name}` : ""}
+        </p>
+        <form onSubmit={handleSubmit} className="lab-form">
+          {error && <p className="lab-form-error">{error}</p>}
+          <div className="space-y-1.5">
+            {STEPS.map((st) => (
+              <button
+                key={st.key}
+                type="button"
+                onClick={() => setStepKey(st.key)}
+                className={`w-full flex items-center gap-2 text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+                  st.key === stepKey
+                    ? "border-primary bg-primary/10 font-semibold text-foreground"
+                    : "border-border text-muted-foreground hover:bg-accent"
+                }`}
+              >
+                {st.direction === "sent" ? (
+                  <ArrowRight className="w-4 h-4 text-sky-600 shrink-0" />
+                ) : st.direction === "received" ? (
+                  <ArrowLeft className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <Wrench className="w-4 h-4 text-violet-600 shrink-0" />
+                )}
+                {st.label}
+              </button>
+            ))}
+          </div>
+          <div className="lab-field">
+            <label htmlFor="step-date" className="lab-label">
+              Fecha en que {step.direction === "sent" ? "se envió" : step.direction === "received" ? "llegó" : "se instaló"}
+            </label>
+            <input
+              id="step-date"
+              type="date"
+              className="lab-input"
+              value={date}
+              max={today}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </div>
+          <div className="lab-field">
+            <label htmlFor="step-note" className="lab-label">Detalle {needsNote ? "*" : "(opcional)"}</label>
+            <input
+              id="step-note"
+              className="lab-input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ej: cambiar color de dientes, ajustar oclusión..."
+            />
+          </div>
+          <div className="lab-form-actions">
+            <button type="button" className="lab-btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="lab-btn-primary" disabled={isPending}>
+              {isPending ? <span className="lab-spinner" /> : "Registrar"}
             </button>
           </div>
         </form>
@@ -344,15 +484,18 @@ function fechaHora(iso: string) {
 function OrderCard({
   order,
   onStatusClick,
+  onStepClick,
   onVoidClick,
 }: {
   order: LabOrder;
   onStatusClick: (o: LabOrder) => void;
+  onStepClick: (o: LabOrder) => void;
   onVoidClick: (o: LabOrder) => void;
 }) {
   const cfg = STATUS_CONFIG[order.status];
   const [showHistory, setShowHistory] = useState(false);
   const events = order.events ?? [];
+  const lastStep = [...events].reverse().find((e) => e.stage);
   return (
     <div className={`lab-order-card ${order.is_overdue ? "lab-order-card--overdue" : ""}`}>
       <div className="lab-order-header">
@@ -368,6 +511,11 @@ function OrderCard({
         </div>
         <div className="lab-order-actions">
           {!["installed","cancelled"].includes(order.status) && (
+            <button className="lab-icon-btn" onClick={() => onStepClick(order)} title="Registrar movimiento (envío / recepción)">
+              <ArrowLeftRight className="w-4 h-4" />
+            </button>
+          )}
+          {!["installed","cancelled"].includes(order.status) && (
             <button className="lab-icon-btn" onClick={() => onStatusClick(order)} title="Cambiar estado">
               <Wrench className="w-4 h-4" />
             </button>
@@ -379,6 +527,12 @@ function OrderCard({
       </div>
 
       <p className="lab-order-title">{order.work_type}</p>
+      {lastStep && (
+        <p className="text-xs font-semibold text-primary mt-0.5">
+          Etapa: {STEP_LABEL[lastStep.stage!] ?? lastStep.stage}
+          {lastStep.event_date ? ` · ${isoToDisplay(lastStep.event_date)}` : ""}
+        </p>
+      )}
       <div className="lab-order-meta">
         <span>👤 {order.patient_name}</span>
         <span>🦷 {order.dentist_name}</span>
@@ -421,7 +575,26 @@ function OrderCard({
           </button>
           {showHistory && (
             <ol className="mt-2 space-y-1.5 text-xs">
-              {[...events].reverse().map((e) => (
+              {[...events].reverse().map((e) =>
+                e.stage ? (
+                  <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-muted-foreground tabular-nums">
+                      {e.event_date ? isoToDisplay(e.event_date) : fechaHora(e.created_at)}
+                    </span>
+                    <span
+                      className={`font-semibold ${
+                        e.direction === "sent" ? "text-sky-700" : e.direction === "received" ? "text-emerald-700" : "text-violet-700"
+                      }`}
+                    >
+                      {e.direction === "sent" ? "→ " : e.direction === "received" ? "← " : ""}
+                      {STEP_LABEL[e.stage] ?? e.stage}
+                    </span>
+                    {e.note && <span className="text-muted-foreground italic">· {e.note}</span>}
+                    <span className="text-muted-foreground/70 text-[10px]">
+                      (anotado {fechaHora(e.created_at)}{e.changed_by_name ? ` por ${e.changed_by_name}` : ""})
+                    </span>
+                  </li>
+                ) : (
                 <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
                   <span className="text-muted-foreground tabular-nums">{fechaHora(e.created_at)}</span>
                   <span className="font-semibold text-foreground">
@@ -434,7 +607,8 @@ function OrderCard({
                   {e.changed_by_name && <span className="text-muted-foreground">· {e.changed_by_name}</span>}
                   {e.note && <span className="text-muted-foreground italic">· {e.note}</span>}
                 </li>
-              ))}
+                )
+              )}
             </ol>
           )}
         </div>
@@ -518,7 +692,7 @@ function BillingSummarySection({
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 type Tab = "orders" | "billing" | "labs";
-type Modal = "newLab" | "newOrder" | "status" | "void" | null;
+type Modal = "newLab" | "newOrder" | "status" | "step" | "void" | null;
 
 export function LaboratorioClient({
   labs = [],
@@ -636,6 +810,7 @@ export function LaboratorioClient({
                 key={o.id}
                 order={o}
                 onStatusClick={(ord) => { setStatusTarget(ord); setModal("status"); }}
+                onStepClick={(ord) => { setStatusTarget(ord); setModal("step"); }}
                 onVoidClick={(ord) => { setVoidTarget(ord); setModal("void"); }}
               />
             ))
@@ -678,6 +853,9 @@ export function LaboratorioClient({
       {modal === "newOrder" && <NewOrderModal labs={safeLabs} onClose={closeModal} />}
       {modal === "status" && statusTarget && (
         <StatusModal order={statusTarget} onClose={closeModal} />
+      )}
+      {modal === "step" && statusTarget && (
+        <StepModal order={statusTarget} onClose={closeModal} />
       )}
       {modal === "void" && voidTarget && (
         <div className="lab-modal-overlay" onClick={closeModal}>
