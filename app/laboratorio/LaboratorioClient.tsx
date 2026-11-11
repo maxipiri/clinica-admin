@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   Building2,
+  History,
 } from "lucide-react";
 import { formatCLP } from "@/lib/utils";
 import {
@@ -328,6 +329,18 @@ function PayLabModal({
 
 // ─── Tarjeta de orden ─────────────────────────────────────────────────────────
 
+/** "10 nov 2026, 17:05" en hora de Chile */
+function fechaHora(iso: string) {
+  return new Intl.DateTimeFormat("es-CL", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Santiago",
+  }).format(new Date(iso));
+}
+
 function OrderCard({
   order,
   onStatusClick,
@@ -338,6 +351,8 @@ function OrderCard({
   onVoidClick: (o: LabOrder) => void;
 }) {
   const cfg = STATUS_CONFIG[order.status];
+  const [showHistory, setShowHistory] = useState(false);
+  const events = order.events ?? [];
   return (
     <div className={`lab-order-card ${order.is_overdue ? "lab-order-card--overdue" : ""}`}>
       <div className="lab-order-header">
@@ -391,6 +406,39 @@ function OrderCard({
           </span>
         )}
       </div>
+
+      {events.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-border">
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="w-full flex items-center justify-between text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <History className="w-3.5 h-3.5" /> Historial de estados ({events.length})
+            </span>
+            {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {showHistory && (
+            <ol className="mt-2 space-y-1.5 text-xs">
+              {[...events].reverse().map((e) => (
+                <li key={e.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-muted-foreground tabular-nums">{fechaHora(e.created_at)}</span>
+                  <span className="font-semibold text-foreground">
+                    {e.from_status
+                      ? `${STATUS_CONFIG[e.from_status]?.label ?? e.from_status} → ${STATUS_CONFIG[e.to_status]?.label ?? e.to_status}`
+                      : e.note
+                      ? STATUS_CONFIG[e.to_status]?.label ?? e.to_status
+                      : `Creada como ${STATUS_CONFIG[e.to_status]?.label ?? e.to_status}`}
+                  </span>
+                  {e.changed_by_name && <span className="text-muted-foreground">· {e.changed_by_name}</span>}
+                  {e.note && <span className="text-muted-foreground italic">· {e.note}</span>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
     </div>
   );
 }
