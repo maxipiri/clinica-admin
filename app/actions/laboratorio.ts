@@ -1,5 +1,6 @@
 "use server";
 
+import type { TreatmentCategory } from "@/app/actions/atenciones";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -43,6 +44,8 @@ export type LabOrder = {
   voided_at: string | null;
   created_at: string;
   is_overdue: boolean;
+  /** Tipo de tratamiento (define el color de la tarjeta) */
+  category: TreatmentCategory;
   /** Historial de cambios de estado (más antiguo primero) */
   events: LabOrderEvent[];
 };
@@ -259,9 +262,23 @@ export async function getLabOrders(filters?: {
       return [];
     }
 
+    // Categoría de cada orden: la de la atención que la creó (si existe)
+    const ids = (data ?? []).map((o: any) => o.id);
+    const catByOrder = new Map<string, TreatmentCategory>();
+    if (ids.length > 0) {
+      const { data: appts } = await supabase
+        .from("appointments_work")
+        .select("lab_order_id, category")
+        .in("lab_order_id", ids);
+      for (const a of (appts ?? []) as any[]) {
+        if (a.lab_order_id && a.category) catByOrder.set(a.lab_order_id, a.category);
+      }
+    }
+
     const today = new Date().toISOString().split("T")[0];
     return (data ?? []).map((o: any) => ({
       ...o,
+      category: catByOrder.get(o.id) ?? guessCategory(o.work_type),
       lab_name: o.labs?.name ?? null,
       labs: undefined,
       events: ((o.lab_order_events ?? []) as LabOrderEvent[]).sort(
@@ -491,4 +508,15 @@ export async function registerLabStep(data: {
   } catch (e) {
     return { error: (e as Error).message };
   }
+}
+
+/** Para órdenes creadas a mano (sin atención): deduce el tratamiento por el nombre. */
+function guessCategory(workType: string | null): TreatmentCategory {
+  const t = (workType ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/implant|corona sobre|pilar/.test(t)) return "implant";
+  if (/protesis|protsis|placa|valplast|flexible|acrilic|metalic|rodete|enfilado/.test(t)) return "prosthesis";
+  if (/endodon|retratamiento/.test(t)) return "endodontics";
+  if (/ortodon|bracket|contencion|retenedor|alineador/.test(t)) return "orthodontics";
+  if (/carilla|blanqueamiento|estetic/.test(t)) return "aesthetics";
+  return "general";
 }
