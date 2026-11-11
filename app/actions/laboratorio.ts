@@ -54,6 +54,11 @@ export type LabOrderEvent = {
   changed_by_name: string | null;
   note: string | null;
   created_at: string;
+  /** Etapa del trabajo (modelo, rodete, enfilado, terminación...) */
+  stage: string | null;
+  direction: "sent" | "received" | "installed" | "other" | null;
+  /** Fecha real del movimiento (puede ser anterior al registro) */
+  event_date: string | null;
 };
 
 export type LabBillingSummary = {
@@ -239,7 +244,7 @@ export async function getLabOrders(filters?: {
          status, lab_cost, charged_to_patient, billing_month,
          lab_paid, lab_paid_at, voided_at, created_at,
          labs(name),
-         lab_order_events(id, from_status, to_status, changed_by_name, note, created_at)`
+         lab_order_events(id, from_status, to_status, changed_by_name, note, created_at, stage, direction, event_date)`
       )
       .is("voided_at", null)
       .order("created_at", { ascending: false });
@@ -259,8 +264,10 @@ export async function getLabOrders(filters?: {
       ...o,
       lab_name: o.labs?.name ?? null,
       labs: undefined,
-      events: ((o.lab_order_events ?? []) as LabOrderEvent[]).sort((a, b) =>
-        a.created_at.localeCompare(b.created_at)
+      events: ((o.lab_order_events ?? []) as LabOrderEvent[]).sort(
+        (a, b) =>
+          (a.event_date ?? a.created_at.slice(0, 10)).localeCompare(b.event_date ?? b.created_at.slice(0, 10)) ||
+          a.created_at.localeCompare(b.created_at)
       ),
       lab_order_events: undefined,
       is_overdue:
@@ -450,6 +457,36 @@ export async function payLabMonth(data: {
 
     revalidatePath("/laboratorio");
     revalidatePath("/caja");
+    return { error: null };
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+}
+
+/**
+ * Registra una ida o vuelta del trabajo (envío al laboratorio, recepción,
+ * instalación) con su etapa y la fecha real. Actualiza el estado de la orden.
+ */
+export async function registerLabStep(data: {
+  order_id: string;
+  stage: string;
+  direction: "sent" | "received" | "installed" | "other";
+  event_date: string;
+  note?: string;
+}): Promise<{ error: string | null }> {
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data.event_date)) return { error: "Fecha inválida" };
+    if (!data.stage.trim()) return { error: "Elige el movimiento" };
+    const { supabase } = await getClinicId();
+    const { error } = await supabase.rpc("register_lab_step", {
+      p_order_id: data.order_id,
+      p_stage: data.stage.trim(),
+      p_direction: data.direction,
+      p_event_date: data.event_date,
+      p_note: data.note?.trim() || null,
+    });
+    if (error) return { error: error.message };
+    revalidatePath("/laboratorio");
     return { error: null };
   } catch (e) {
     return { error: (e as Error).message };
