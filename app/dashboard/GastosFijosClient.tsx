@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Pencil, Check, X, PlusCircle, EyeOff, Eye, Download } from "lucide-react";
-import { formatCLP, cn } from "@/lib/utils";
+import { CheckCircle2, Pencil, Check, X, PlusCircle, Pause, Play, Download } from "lucide-react";
+import { Monto, OjoMonto } from "@/components/MontosPrivados";
+import { cn } from "@/lib/utils";
 import {
   loadRecurringExpenses,
   saveRecurringExpense,
@@ -48,7 +49,7 @@ export function GastosFijosClient({
   return (
     <div className="bg-card border border-border rounded-xl">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-2">
-        <h2 className="font-bold text-foreground">Gastos fijos</h2>
+        <h2 className="font-bold text-foreground flex items-center gap-1">Gastos fijos <OjoMonto k="fijos" /></h2>
         <button
           type="button"
           onClick={() => setEditing({ name: "", amount: "" })}
@@ -108,7 +109,7 @@ export function GastosFijosClient({
                 </p>
               </div>
               <div className="flex items-center gap-1">
-                <span className="font-mono font-semibold mr-1">{formatCLP(i.amount)}</span>
+                <span className="font-mono font-semibold mr-1"><Monto k="fijos" value={i.amount} /></span>
                 <button
                   type="button"
                   onClick={() => setEditing({ id: i.id, name: i.name, amount: String(i.amount) })}
@@ -124,7 +125,7 @@ export function GastosFijosClient({
                   className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent"
                   title={i.active ? "Pausar" : "Reactivar"}
                 >
-                  {i.active ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {i.active ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
@@ -150,7 +151,7 @@ export function GastosFijosClient({
           >
             <Download className="w-3.5 h-3.5" />
             Cargar {pending.length} gasto{pending.length > 1 ? "s" : ""} fijo{pending.length > 1 ? "s" : ""} en {monthName} (
-            {formatCLP(pendingTotal)})
+            <Monto k="fijos" value={pendingTotal} />)
           </button>
         </div>
       )}
