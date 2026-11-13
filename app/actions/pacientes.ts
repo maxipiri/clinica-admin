@@ -1,7 +1,7 @@
 "use server";
 
+import { getClinicId } from "@/lib/supabase/clinic";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -28,22 +28,6 @@ const patientSchema = z.object({
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function getClinicId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.clinic_id) throw new Error("Perfil sin clínica");
-  return { supabase, clinic_id: profile.clinic_id as string, user_id: user.id };
-}
 
 // ─── Consultas ───────────────────────────────────────────────────────────────
 
