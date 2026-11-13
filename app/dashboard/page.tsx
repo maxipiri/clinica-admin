@@ -12,6 +12,7 @@ import {
   Tags,
   HandCoins,
   UserRound,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMonthSummary, getRecurringExpenses } from "@/app/actions/resumen";
@@ -89,7 +90,15 @@ export default async function DashboardPage({
             Lo que realmente gana la clínica: producción menos dentistas, laboratorio, insumos y gastos.
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start">
+        <div className="flex flex-wrap items-center gap-2 self-start">
+        <a
+          href={`/dashboard/exportar?mes=${month}`}
+          download
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-sm font-semibold text-emerald-700 hover:bg-accent"
+          title={`Descargar ${name} en Excel`}
+        >
+          <FileSpreadsheet className="w-4 h-4" /> Exportar Excel
+        </a>
         <OjoTodos />
         <div className="inline-flex items-center bg-card border border-border rounded-lg overflow-hidden">
           <Link href={`/dashboard?mes=${shiftMonth(month, -1)}`} className="p-2 hover:bg-accent" aria-label="Mes anterior">
