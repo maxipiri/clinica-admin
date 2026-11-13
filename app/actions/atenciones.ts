@@ -1,7 +1,7 @@
 "use server";
 
+import { getClinicId } from "@/lib/supabase/clinic";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import {
   computeDentistPay,
@@ -103,22 +103,6 @@ const appointmentSchema = z.object({
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-async function getClinicId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.clinic_id) throw new Error("Perfil sin clínica");
-  return { supabase, clinic_id: profile.clinic_id as string, user_id: user.id };
-}
 
 // ─── Consultas ───────────────────────────────────────────────────────────────
 
@@ -151,6 +135,9 @@ export async function getAppointments(filters?: {
   dentist_id?: string;
   patient_id?: string;
   payment_status?: string;
+  /** Rango de fechas: desde (incluida) y hasta (excluida), YYYY-MM-DD */
+  from?: string;
+  to?: string;
 }): Promise<Appointment[]> {
   try {
     const { supabase } = await getClinicId();
@@ -173,6 +160,8 @@ export async function getAppointments(filters?: {
     if (filters?.dentist_id) q = q.eq("dentist_id", filters.dentist_id);
     if (filters?.patient_id) q = q.eq("patient_id", filters.patient_id);
     if (filters?.payment_status) q = q.eq("payment_status", filters.payment_status);
+    if (filters?.from) q = q.gte("date", filters.from);
+    if (filters?.to) q = q.lt("date", filters.to);
 
     const { data, error } = await q;
     if (error) {

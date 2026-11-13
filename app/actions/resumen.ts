@@ -1,7 +1,7 @@
 "use server";
 
+import { getClinicId } from "@/lib/supabase/clinic";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { getAppointments, type TreatmentCategory } from "@/app/actions/atenciones";
 
@@ -32,20 +32,6 @@ export type RecurringExpense = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function getClinicId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("clinic_id")
-    .eq("id", user.id)
-    .single();
-  if (!profile?.clinic_id) throw new Error("Perfil sin clínica");
-  return { supabase, clinic_id: profile.clinic_id as string, user_id: user.id };
-}
 
 function monthRange(month: string) {
   const [y, m] = month.split("-").map(Number);
@@ -77,18 +63,17 @@ export async function getMonthSummary(month: string): Promise<MonthSummary> {
     const { supabase } = await getClinicId();
     const { start, end } = monthRange(month);
 
-    const appts = (await getAppointments()).filter((a) => a.date >= start && a.date < end);
-
-    const { data: movs } = await supabase
-      .from("cash_movements")
-      .select("id, type, amount, cash_categories(name)")
-      .gte("date", start)
-      .lt("date", end)
-      .is("voided_at", null);
-
-    // Los egresos por pagos a laboratorio y liquidaciones de dentistas ya se cuentan
-    // en "laboratorio" y "dentistas" (por atención), así que no se suman dos veces.
-    const [{ data: labPays }, { data: settlements }] = await Promise.all([
+    // Todo en paralelo (antes era una consulta tras otra)
+    const [appts, { data: movs }, { data: labPays }, { data: settlements }] = await Promise.all([
+      getAppointments({ from: start, to: end }),
+      supabase
+        .from("cash_movements")
+        .select("id, type, amount, cash_categories(name)")
+        .gte("date", start)
+        .lt("date", end)
+        .is("voided_at", null),
+      // Los egresos por pagos a laboratorio y liquidaciones de dentistas ya se cuentan
+      // en "laboratorio" y "dentistas" (por atención), así que no se suman dos veces.
       supabase.from("lab_payments").select("cash_movement_id").not("cash_movement_id", "is", null),
       supabase.from("dentist_settlements").select("cash_movement_id").not("cash_movement_id", "is", null),
     ]);

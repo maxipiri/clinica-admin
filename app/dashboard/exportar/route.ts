@@ -95,7 +95,7 @@ export async function GET(request: Request) {
   const [summary, recurring, allAppts, allOrders, { data: movs }] = await Promise.all([
     getMonthSummary(month),
     getRecurringExpenses(month),
-    getAppointments(),
+    getAppointments({ from: start, to: end }),
     getLabOrders(),
     supabase
       .from("cash_movements")
