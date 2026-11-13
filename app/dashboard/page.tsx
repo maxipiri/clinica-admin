@@ -13,10 +13,11 @@ import {
   HandCoins,
   UserRound,
 } from "lucide-react";
-import { formatCLP, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { getMonthSummary, getRecurringExpenses } from "@/app/actions/resumen";
 import { CATEGORIES } from "@/app/atenciones/categories";
 import { GastosFijosClient } from "./GastosFijosClient";
+import { MontosProvider, Monto, OjoMonto, OjoTodos } from "@/components/MontosPrivados";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -65,8 +66,18 @@ export default async function DashboardPage({
     { label: "Gastos del mes (caja)", value: -summary.expenses || 0 },
   ];
   const pendingRecurring = recurring.filter((r) => r.active && !r.loaded);
+  const montoKeys = [
+    "ganancia",
+    "caja",
+    "cobrar",
+    "detalle",
+    ...CATEGORIES.map((c) => `cat-${c.key}`),
+    "gastos",
+    "fijos",
+  ];
 
   return (
+    <MontosProvider storageKey="clinica-admin:resultado-ocultos" keys={montoKeys}>
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
@@ -78,7 +89,9 @@ export default async function DashboardPage({
             Lo que realmente gana la clínica: producción menos dentistas, laboratorio, insumos y gastos.
           </p>
         </div>
-        <div className="inline-flex items-center bg-card border border-border rounded-lg overflow-hidden self-start">
+        <div className="flex items-center gap-2 self-start">
+        <OjoTodos />
+        <div className="inline-flex items-center bg-card border border-border rounded-lg overflow-hidden">
           <Link href={`/dashboard?mes=${shiftMonth(month, -1)}`} className="p-2 hover:bg-accent" aria-label="Mes anterior">
             <ChevronLeft className="w-4 h-4" />
           </Link>
@@ -87,14 +100,18 @@ export default async function DashboardPage({
             <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
+        </div>
       </div>
 
       {/* Ganancia + cobrado */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="md:col-span-1 p-5 rounded-xl border border-border bg-card">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ganancia real · {name}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Ganancia real · {name}</p>
+            <OjoMonto k="ganancia" className="-mt-1.5 -mr-1.5" />
+          </div>
           <p className={cn("text-3xl font-extrabold mt-1", summary.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
-            {formatCLP(summary.profit)}
+            <Monto k="ganancia" value={summary.profit} />
           </p>
           <p className="text-xs text-muted-foreground mt-1">{summary.appointments_count} atenciones en el mes</p>
           {pendingRecurring.length > 0 && (
@@ -104,14 +121,20 @@ export default async function DashboardPage({
           )}
         </div>
         <div className="p-5 rounded-xl border border-border bg-card">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entró a caja</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{formatCLP(summary.collected)}</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Entró a caja</p>
+            <OjoMonto k="caja" className="-mt-1.5 -mr-1.5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground mt-1"><Monto k="caja" value={summary.collected} /></p>
           <p className="text-xs text-muted-foreground mt-1">Abonos y pagos recibidos en {name.toLowerCase()}</p>
         </div>
         <Link href="/cobranza" className="p-5 rounded-xl border border-border bg-card hover:shadow-md transition-shadow">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por cobrar de este mes</p>
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Por cobrar de este mes</p>
+            <OjoMonto k="cobrar" className="-mt-1.5 -mr-1.5" />
+          </div>
           <p className={cn("text-2xl font-bold mt-1", summary.pending_from_month > 0 ? "text-rose-600" : "text-foreground")}>
-            {formatCLP(summary.pending_from_month)}
+            <Monto k="cobrar" value={summary.pending_from_month} />
           </p>
           <p className="text-xs text-primary mt-1 font-semibold">Ver lista de cobranza →</p>
         </Link>
@@ -121,20 +144,22 @@ export default async function DashboardPage({
         <div className="space-y-4">
           {/* Estado de resultado */}
           <div className="bg-card border border-border rounded-xl">
-            <h2 className="px-4 py-3 font-bold text-foreground border-b border-border">Detalle del resultado</h2>
+            <h2 className="px-4 py-2 font-bold text-foreground border-b border-border flex items-center justify-between">
+              Detalle del resultado <OjoMonto k="detalle" className="-mr-1.5" />
+            </h2>
             <div className="px-4 py-3 space-y-1.5 text-sm">
               {lines.map((l) => (
                 <div key={l.label} className="flex justify-between">
                   <span className="text-muted-foreground">{l.label}</span>
                   <span className={cn("font-mono", l.value < 0 ? "text-rose-600" : "text-foreground font-semibold")}>
-                    {l.value < 0 ? `−${formatCLP(-l.value)}` : formatCLP(l.value)}
+                    <Monto k="detalle" value={l.value} negative={l.value < 0} />
                   </span>
                 </div>
               ))}
               <div className="flex justify-between border-t border-border pt-2 mt-2 text-base font-bold">
                 <span>Ganancia real</span>
                 <span className={cn("font-mono", summary.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                  {formatCLP(summary.profit)}
+                  <Monto k="detalle" value={summary.profit} />
                 </span>
               </div>
             </div>
@@ -149,12 +174,13 @@ export default async function DashboardPage({
                   <p className="flex items-center gap-1.5 text-sm font-bold text-foreground">
                     <meta.icon className="w-4 h-4 text-primary" /> {meta.plural}
                     <span className="ml-auto text-xs font-normal text-muted-foreground">{c.count}</span>
+                    <OjoMonto k={`cat-${c.category}`} className="-my-1 -mr-2" />
                   </p>
                   <p className="text-xs text-muted-foreground mt-2">Producción</p>
-                  <p className="font-mono font-semibold">{formatCLP(c.production)}</p>
+                  <p className="font-mono font-semibold"><Monto k={`cat-${c.category}`} value={c.production} /></p>
                   <p className="text-xs text-muted-foreground mt-1">Ganancia clínica</p>
                   <p className={cn("font-mono font-semibold", c.profit >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                    {formatCLP(c.profit)}
+                    <Monto k={`cat-${c.category}`} value={c.profit} />
                   </p>
                 </div>
               );
@@ -163,8 +189,12 @@ export default async function DashboardPage({
 
           {/* Gastos por categoría */}
           <div className="bg-card border border-border rounded-xl">
-            <h2 className="px-4 py-3 font-bold text-foreground border-b border-border flex justify-between">
-              Gastos del mes <span className="font-mono">{formatCLP(summary.expenses)}</span>
+            <h2 className="px-4 py-2 font-bold text-foreground border-b border-border flex items-center justify-between gap-2">
+              Gastos del mes
+              <span className="flex items-center gap-1">
+                <span className="font-mono"><Monto k="gastos" value={summary.expenses} /></span>
+                <OjoMonto k="gastos" className="-mr-1.5" />
+              </span>
             </h2>
             {summary.expenses_by_category.length === 0 ? (
               <p className="px-4 py-4 text-sm text-muted-foreground">
@@ -179,7 +209,7 @@ export default async function DashboardPage({
                 {summary.expenses_by_category.map((e) => (
                   <div key={e.name} className="px-4 py-2 flex justify-between text-sm">
                     <span>{e.name}</span>
-                    <span className="font-mono">{formatCLP(e.amount)}</span>
+                    <span className="font-mono"><Monto k="gastos" value={e.amount} /></span>
                   </div>
                 ))}
               </div>
@@ -204,5 +234,6 @@ export default async function DashboardPage({
         </div>
       </div>
     </div>
+    </MontosProvider>
   );
 }
